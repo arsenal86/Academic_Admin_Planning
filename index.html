@@ -178,8 +178,15 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, setDoc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "DEMO", authDomain: "DEMO", projectId: "DEMO" };
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'gantt-chart-default';
+        const firebaseConfig = {
+            apiKey: "AIzaSyD-jFEgWmC-jEIePAIbvupOwG3dVaHFqwA",
+            authDomain: "academicadmingantt.firebaseapp.com",
+            projectId: "academicadmingantt",
+            storageBucket: "academicadmingantt.firebasestorage.app",
+            messagingSenderId: "695375568369",
+            appId: "1:695375568369:web:17bcc997d58738c3d9b850",
+            measurementId: "G-E2L1G88HP3"
+        };
         
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
@@ -258,26 +265,23 @@
             }
         }
 
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                userId = user.uid;
-                const collectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'academic_events');
-                
-                await seedInitialData(collectionRef);
+        signInAnonymously(auth)
+            .then(() => {
+                console.log("Signed in anonymously");
+                userId = auth.currentUser.uid;
+                const collectionRef = collection(db, 'academic_events');
+
+                seedInitialData(collectionRef); // Make sure data is seeded
 
                 onSnapshot(collectionRef, (snapshot) => {
                     academicData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     setupFilters();
                     updateView();
                 });
-            }
-        });
-
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-            signInWithCustomToken(auth, __initial_auth_token).catch(error => console.error("Error signing in with custom token:", error));
-        } else {
-            signInAnonymously(auth).catch(error => console.error("Error signing in anonymously:", error));
-        }
+            })
+            .catch((error) => {
+                console.error("Error signing in anonymously:", error);
+            });
 
         function setupFilters() {
             const categories = [...new Set(academicData.map(item => item.category))];
@@ -443,7 +447,7 @@
                 notes: document.getElementById('notes').value,
             };
 
-            const collectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'academic_events');
+            const collectionRef = collection(db, 'academic_events');
             if (id) {
                 await updateDoc(doc(collectionRef, id), data);
             } else {
@@ -468,7 +472,7 @@
         });
         confirmDeleteBtn.addEventListener('click', async () => {
             if (activityToDeleteId) {
-                const collectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'academic_events');
+                const collectionRef = collection(db, 'academic_events');
                 await deleteDoc(doc(collectionRef, activityToDeleteId));
                 activityToDeleteId = null;
                 confirmDeleteModal.close();
