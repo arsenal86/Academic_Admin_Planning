@@ -101,7 +101,8 @@
                  <div class="border-t border-stone-200 pt-8">
                     <h2 class="text-2xl font-bold text-center mb-2 text-stone-800">Activity Details</h2>
                     <p class="text-md text-stone-600 text-center mb-6">A detailed list of the activities currently displayed in the chart above. Use the filters to narrow down this list.</p>
-                    <div id="activities-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <p id="loading-indicator" class="text-center text-stone-600 py-8">Loading activities...</p>
+                    <div id="activities-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" style="display: none;">
                     </div>
                     <div id="no-results" class="hidden text-center py-12">
                          <p class="text-xl font-semibold text-stone-700">No Matching Activities</p>
@@ -197,12 +198,25 @@
         let chart;
         let userId;
 
-        const categoryColors = {
-            'Administration': 'rgba(29, 78, 216, 0.7)', 'Admissions': 'rgba(190, 18, 60, 0.7)', 'Student Support': 'rgba(217, 119, 6, 0.7)', 'Welcome & Induction': 'rgba(4, 120, 87, 0.7)', 'Academics': 'rgba(13, 148, 136, 0.7)', 'Assessments': 'rgba(147, 51, 234, 0.7)', 'University Holiday': 'rgba(107, 114, 128, 0.7)', 'Recruitment': 'rgba(219, 39, 119, 0.7)', 'Quality Assurance': 'rgba(99, 102, 241, 0.7)', 'Careers & Placements': 'rgba(22, 163, 74, 0.7)', 'Events': 'rgba(234, 88, 12, 0.7)'
+        // Hardcoded categories for initial UI population
+        const predefinedCategories = {
+            'Administration': { color: 'rgba(29, 78, 216, 0.7)', borderColor: 'rgb(29, 78, 216)' },
+            'Admissions': { color: 'rgba(190, 18, 60, 0.7)', borderColor: 'rgb(190, 18, 60)' },
+            'Student Support': { color: 'rgba(217, 119, 6, 0.7)', borderColor: 'rgb(217, 119, 6)' },
+            'Welcome & Induction': { color: 'rgba(4, 120, 87, 0.7)', borderColor: 'rgb(4, 120, 87)' },
+            'Academics': { color: 'rgba(13, 148, 136, 0.7)', borderColor: 'rgb(13, 148, 136)' },
+            'Assessments': { color: 'rgba(147, 51, 234, 0.7)', borderColor: 'rgb(147, 51, 234)' },
+            'University Holiday': { color: 'rgba(107, 114, 128, 0.7)', borderColor: 'rgb(107, 114, 128)' },
+            'Recruitment': { color: 'rgba(219, 39, 119, 0.7)', borderColor: 'rgb(219, 39, 119)' },
+            'Quality Assurance': { color: 'rgba(99, 102, 241, 0.7)', borderColor: 'rgb(99, 102, 241)' },
+            'Careers & Placements': { color: 'rgba(22, 163, 74, 0.7)', borderColor: 'rgb(22, 163, 74)' },
+            'Events': { color: 'rgba(234, 88, 12, 0.7)', borderColor: 'rgb(234, 88, 12)' }
         };
-        const categoryBorderColors = {
-            'Administration': 'rgb(29, 78, 216)', 'Admissions': 'rgb(190, 18, 60)', 'Student Support': 'rgb(217, 119, 6)', 'Welcome & Induction': 'rgb(4, 120, 87)', 'Academics': 'rgb(13, 148, 136)', 'Assessments': 'rgb(147, 51, 234)', 'University Holiday': 'rgb(107, 114, 128)', 'Recruitment': 'rgb(219, 39, 119)', 'Quality Assurance': 'rgb(99, 102, 241)', 'Careers & Placements': 'rgb(22, 163, 74)', 'Events': 'rgb(234, 88, 12)'
-        };
+
+        // These will be used by Chart.js and other parts of the application
+        const categoryColors = Object.fromEntries(Object.entries(predefinedCategories).map(([key, value]) => [key, value.color]));
+        const categoryBorderColors = Object.fromEntries(Object.entries(predefinedCategories).map(([key, value]) => [key, value.borderColor]));
+
         const initialData = [
             { activity: "Pre-Term Preparation", category: "Administration", start: "2025-08-01", end: "2025-09-20", responsible: "Admin Team", notes: "Finalise timetables, update handbooks, prepare welcome packs.", kbLink: "" },
             { activity: "A-Level Results & Clearing", category: "Admissions", start: "2025-08-14", end: "2025-09-20", responsible: "Admissions, C&E Tutors", notes: "High volume of calls and emails expected.", kbLink: "" },
@@ -237,6 +251,7 @@
         const searchBox = document.getElementById('search-box');
         const categoryFiltersContainer = document.getElementById('category-filters');
         const activitiesList = document.getElementById('activities-list');
+        const loadingIndicator = document.getElementById('loading-indicator');
         const noResultsDiv = document.getElementById('no-results');
         const ctx = document.getElementById('ganttChart').getContext('2d');
         const addNewBtn = document.getElementById('add-new-btn');
@@ -273,21 +288,38 @@
 
                 seedInitialData(collectionRef); // Make sure data is seeded
 
+                // Populate static UI elements immediately
+                populateStaticUI();
+                // Show loading indicator initially
+                loadingIndicator.style.display = 'block';
+                activitiesList.style.display = 'none';
+
+
                 onSnapshot(collectionRef, (snapshot) => {
                     academicData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    setupFilters();
-                    updateView();
+                    // setupFilters(); // This function's role has changed.
+                                    // It might be used for dynamic category updates later if needed.
+                    if (snapshot.metadata.hasPendingWrites) {
+                        console.log("Data is from local cache, waiting for server sync...");
+                        // Optionally, keep loading indicator visible or show a specific message
+                    } else {
+                        console.log("Data from server or fully synced.");
+                        updateView(); // Initial view update once data arrives and is stable
+                    }
                 });
             })
             .catch((error) => {
                 console.error("Error signing in anonymously:", error);
             });
 
-        function setupFilters() {
-            const categories = [...new Set(academicData.map(item => item.category))];
+        function populateStaticUI() {
+            const categories = Object.keys(predefinedCategories);
             const categorySelect = document.getElementById('activity-category');
+
+            // Populate category dropdown in the form
             categorySelect.innerHTML = categories.map(c => `<option value="${c}">${c}</option>`).join('');
 
+            // Populate category filter buttons
             categoryFiltersContainer.innerHTML = categories.map(category => `
                 <button class="filter-btn px-3 py-1.5 text-sm font-medium text-stone-700 bg-stone-100 rounded-full hover:bg-stone-200 transition" data-category="${category}">
                     ${category}
@@ -298,64 +330,96 @@
             allButton.className = "filter-btn px-3 py-1.5 text-sm font-medium text-stone-700 bg-stone-100 rounded-full hover:bg-stone-200 transition";
             allButton.dataset.category = "all";
             allButton.textContent = "All Categories";
-            if (activeCategory === null) {
+            if (activeCategory === null) { // Check if null is the default
                 allButton.classList.add('active');
             }
             categoryFiltersContainer.appendChild(allButton);
 
             document.querySelectorAll('.filter-btn').forEach(button => {
-                if(button.dataset.category === activeCategory) button.classList.add('active');
+                // Ensure the 'active' class is correctly set based on activeCategory
+                if (button.dataset.category === activeCategory || (activeCategory === null && button.dataset.category === "all")) {
+                    button.classList.add('active');
+                }
                 button.addEventListener('click', (e) => {
                     const clickedCategory = e.target.dataset.category;
                     document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
                     e.target.classList.add('active');
                     activeCategory = (clickedCategory === 'all') ? null : clickedCategory;
-                    updateView();
+                    updateView(); // This will re-render based on the new filter
                 });
             });
         }
 
-        function renderActivitiesList(data) {
-            if (data.length === 0) {
-                noResultsDiv.classList.remove('hidden');
-                activitiesList.classList.add('hidden');
-                return;
+        function setupFilters() {
+            // This function might still be needed for updates if categories can change dynamically,
+            // but the initial population is handled by populateStaticUI.
+            // For now, we can assume categories are fixed. If dynamic updates are needed,
+            // this function would need to reconcile with predefinedCategories or fetch them.
+            // console.log("setupFilters called - check if still needed or if populateStaticUI covers it.");
+
+            // If academicData is available and you want to ensure all buttons/options match actual data categories:
+            if (academicData.length > 0) {
+                 const dataCategories = [...new Set(academicData.map(item => item.category))];
+                 const formCategories = Object.keys(predefinedCategories);
+                 if (!dataCategories.every(dc => formCategories.includes(dc))) {
+                     console.warn("Mismatch between data categories and predefined categories. UI might not reflect all data filters.");
+                 }
             }
-            noResultsDiv.classList.add('hidden');
-            activitiesList.classList.remove('hidden');
+            // The event listeners for filter buttons are now in populateStaticUI.
+            // If new buttons are added here dynamically, they'll need listeners too.
+        }
 
-            activitiesList.innerHTML = data.map(item => {
-                const startDate = new Date(item.start);
-                const endDate = new Date(item.end);
-                const formattedStart = startDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-                const formattedEnd = endDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        function renderActivitiesList(data) {
+            loadingIndicator.style.display = 'none'; // Always hide loading indicator when this function is called
 
-                return `
-                    <div class="bg-stone-50 border border-stone-200 rounded-lg p-4 flex flex-col h-full shadow-sm">
-                       <div class="flex-grow">
-                         <span class="text-xs font-semibold px-2 py-1 rounded-full" style="background-color: ${categoryColors[item.category]}; color: white;">
-                            ${item.category}
-                        </span>
-                        <h3 class="font-bold text-md mt-2 mb-1 text-stone-800">${item.activity}</h3>
-                        <p class="text-sm text-stone-600 mb-2">
-                            <span class="font-semibold">Dates:</span> ${formattedStart} - ${formattedEnd}
-                        </p>
-                        <p class="text-sm text-stone-600 mb-3">
-                            <span class="font-semibold">Lead:</span> ${item.responsible}
-                        </p>
-                         ${item.notes ? `<p class="text-xs text-stone-500 bg-stone-100 p-2 rounded mb-3">${item.notes}</p>` : ''}
-                         ${item.kbLink ? `<a href="${item.kbLink}" target="_blank" class="text-sm text-teal-600 hover:text-teal-800 font-semibold">Knowledge Base &#8599;</a>` : ''}
-                       </div>
-                       <div class="border-t border-stone-200 mt-4 pt-3 flex justify-end gap-2">
-                            <button class="edit-btn text-sm text-stone-600 hover:text-stone-900" data-id="${item.id}">Edit</button>
-                            <button class="delete-btn text-sm text-red-500 hover:text-red-700" data-id="${item.id}">Delete</button>
-                       </div>
-                    </div>
-                `;
-            }).join('');
+            if (data.length === 0) {
+                activitiesList.innerHTML = ''; // Clear previous items
+                activitiesList.style.display = 'none'; // Hide list
+                noResultsDiv.classList.remove('hidden'); // Show no results message
+            } else {
+                noResultsDiv.classList.add('hidden'); // Hide no results message
+                activitiesList.style.display = 'grid'; // Show list (restores original display type)
+                activitiesList.innerHTML = data.map(item => {
+                    const startDate = new Date(item.start);
+                    const endDate = new Date(item.end);
+                    const formattedStart = startDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                    const formattedEnd = endDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+                    return `
+                        <div class="bg-stone-50 border border-stone-200 rounded-lg p-4 flex flex-col h-full shadow-sm">
+                           <div class="flex-grow">
+                             <span class="text-xs font-semibold px-2 py-1 rounded-full" style="background-color: ${categoryColors[item.category]}; color: white;">
+                                ${item.category}
+                            </span>
+                            <h3 class="font-bold text-md mt-2 mb-1 text-stone-800">${item.activity}</h3>
+                            <p class="text-sm text-stone-600 mb-2">
+                                <span class="font-semibold">Dates:</span> ${formattedStart} - ${formattedEnd}
+                            </p>
+                            <p class="text-sm text-stone-600 mb-3">
+                                <span class="font-semibold">Lead:</span> ${item.responsible}
+                            </p>
+                             ${item.notes ? `<p class="text-xs text-stone-500 bg-stone-100 p-2 rounded mb-3">${item.notes}</p>` : ''}
+                             ${item.kbLink ? `<a href="${item.kbLink}" target="_blank" class="text-sm text-teal-600 hover:text-teal-800 font-semibold">Knowledge Base &#8599;</a>` : ''}
+                           </div>
+                           <div class="border-t border-stone-200 mt-4 pt-3 flex justify-end gap-2">
+                                <button class="edit-btn text-sm text-stone-600 hover:text-stone-900" data-id="${item.id}">Edit</button>
+                                <button class="delete-btn text-sm text-red-500 hover:text-red-700" data-id="${item.id}">Delete</button>
+                           </div>
+                        </div>
+                    `;
+                }).join('');
+            }
         }
         
         function renderGanttChart(data) {
+            const ganttChartSection = document.getElementById('gantt-chart-section');
+            if (data.length === 0) {
+                if (chart) { chart.destroy(); chart = null; } // Destroy existing chart if it exists
+                ganttChartSection.style.display = 'none'; // Hide the whole section
+                return;
+            }
+            ganttChartSection.style.display = 'block'; // Ensure section is visible
+
             if (chart) { chart.destroy(); }
             const sortedData = data.slice().sort((a, b) => new Date(a.start) - new Date(b.start));
 
